@@ -1,0 +1,308 @@
+const READING_MENU_ID = "toggle-reading";
+const TERMINAL_TTS_EVENTS = new Set(["end", "interrupted", "cancelled", "error"]);
+const DEFAULT_SETTINGS = {
+  rate: 1, pitch: 1, volume: 1, lang: "zh-CN", voiceName: "",
+  autoDetectLanguage: true, showSelectionButton: true, translationTarget: "en"
+};
+const LANGUAGE_LOCALES = {
+  ar: "ar-SA", de: "de-DE", en: "en-US", es: "es-ES", fr: "fr-FR",
+  hi: "hi-IN", id: "id-ID", it: "it-IT", ja: "ja-JP", ko: "ko-KR",
+  ms: "ms-MY", nl: "nl-NL", pl: "pl-PL", pt: "pt-BR", ru: "ru-RU",
+  th: "th-TH", tr: "tr-TR", vi: "vi-VN", zh: "zh-CN"
+};
+const reading = {
+  active: false, paused: false, chunks: [], index: 0, language: "",
+  options: null, session: 0, tabId: null
+};
+
+chrome.runtime.onInstalled.addListener(async () => {
+  await ensureDefaultSettings();
+  createContextMenu();
+});
+chrome.runtime.onStartup.addListener(createContextMenu);
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== READING_MENU_ID) return;
+  if (reading.active || await chrome.tts.isSpeaking()) {
+    stopReading();
+    return;
+  }
+  await speakText(info.selectionText, null, tab?.id);
+});
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === "stop-reading") {
+    stopReading();
+    return;
+  }
+  if (command === "toggle-pause") {
+    togglePause();
+    return;
+  }
+  if (command === "read-selection") {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    try {
+      const [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          const active = document.activeElement;
+          if (
+            active &&
+            (active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement) &&
+            active.selectionStart !== active.selectionEnd
+          ) return active.value.slice(active.selectionStart, active.selectionEnd);
+          return window.getSelection()?.toString() || "";
+        }
+      });
+      await speakText(result, null, tab.id);
+    } catch {
+      // Browser-internal pages do not allow script injection.
+    }
+  }
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "speak-text") {
+    speakText(message.text, message.lang, message.tabId || sender.tab?.id)
+      .then((started) => sendResponse({ started }));
+    return true;
+  }
+  if (message.action === "stop-reading") {
+    stopReading();
+    sendResponse({ stopped: true });
+    return;
+  }
+  if (message.action === "toggle-pause") {
+    togglePause();
+    sendResponse(publicReadingState());
+    return;
+  }
+  if (message.action === "skip-reading") {
+    skipReading(Number(message.offset) || 0);
+    sendResponse(publicReadingState());
+    return;
+  }
+  if (message.action === "get-reading-state") {
+    sendResponse(publicReadingState());
+    return;
+  }
+  if (message.action === "translate-text") {
+    translateText(message.text, message.targetLanguage)
+      .then((translatedText) => sendResponse({ translatedText }))
+      .catch((error) => sendResponse({ error: error.message }));
+    return true;
+  }
+});
+
+async function ensureDefaultSettings() {
+  const savedSettings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+  await chrome.storage.sync.set(savedSettings);
+}
+
+function createContextMenu() {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: READING_MENU_ID, title: "Start reading", contexts: ["all"] });
+  });
+}
+
+async function speakText(rawText, requestedLanguage, tabId) {
+  const text = normalizeText(rawText);
+  if (!text) return false;
+
+  const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+  const language = requestedLanguage || (settings.autoDetectLanguage
+    ? await detectSpeechLanguage(text, settings.lang)
+    : settings.lang);
+  const voiceName = await getCompatibleVoiceName(settings.voiceName, language);
+
+  reading.session += 1;
+  chrome.tts.stop();
+  reading.active = true;
+  reading.paused = false;
+  reading.chunks = splitIntoSpeechChunks(text, language);
+  reading.index = 0;
+  reading.language = language;
+  reading.tabId = tabId || null;
+  reading.options = {
+    lang: language,
+    rate: Number(settings.rate),
+    pitch: Number(settings.pitch),
+    volume: Number(settings.volume),
+    requiredEventTypes: ["end"],
+    ...(voiceName ? { voiceName } : {})
+  };
+  updateReadingState();
+  speakCurrentChunk(reading.session);
+  return true;
+}
+
+function speakCurrentChunk(session) {
+  if (!reading.active || session !== reading.session) return;
+  const chunk = reading.chunks[reading.index];
+  if (!chunk) {
+    finishReading();
+    return;
+  }
+
+  updateReadingState();
+  chrome.tts.speak(chunk, {
+    ...reading.options,
+    enqueue: false,
+    onEvent: (event) => {
+      if (session !== reading.session || !TERMINAL_TTS_EVENTS.has(event.type)) return;
+      if (event.type === "end") {
+        reading.index += 1;
+        speakCurrentChunk(session);
+      } else if (reading.active && !reading.paused) {
+        finishReading();
+      }
+    }
+  }).catch(() => {
+    if (session === reading.session) finishReading();
+  });
+}
+
+function togglePause() {
+  if (!reading.active) return;
+  if (reading.paused) {
+    chrome.tts.resume();
+    reading.paused = false;
+  } else {
+    chrome.tts.pause();
+    reading.paused = true;
+  }
+  updateReadingState();
+}
+
+function skipReading(offset) {
+  if (!reading.active || !offset) return;
+  reading.session += 1;
+  chrome.tts.stop();
+  reading.index = Math.max(0, Math.min(reading.chunks.length - 1, reading.index + offset));
+  reading.paused = false;
+  updateReadingState();
+  speakCurrentChunk(reading.session);
+}
+
+function stopReading() {
+  reading.session += 1;
+  chrome.tts.stop();
+  reading.active = false;
+  reading.paused = false;
+  updateReadingState();
+}
+
+function finishReading() {
+  reading.active = false;
+  reading.paused = false;
+  reading.index = Math.max(0, reading.chunks.length - 1);
+  updateReadingState();
+}
+
+function publicReadingState() {
+  return {
+    active: reading.active, paused: reading.paused, index: reading.index,
+    total: reading.chunks.length, currentText: reading.chunks[reading.index] || ""
+  };
+}
+
+function updateReadingState() {
+  chrome.contextMenus.update(
+    READING_MENU_ID,
+    { title: reading.active ? "Stop reading" : "Start reading" },
+    () => void chrome.runtime.lastError
+  );
+  const message = { action: "reading-state", state: publicReadingState() };
+  chrome.runtime.sendMessage(message).catch(() => {});
+  if (reading.tabId) chrome.tabs.sendMessage(reading.tabId, message).catch(() => {});
+}
+
+function splitIntoSpeechChunks(text, language) {
+  let sentences;
+  try {
+    sentences = [...new Intl.Segmenter(language, { granularity: "sentence" }).segment(text)]
+      .map((item) => item.segment.trim()).filter(Boolean);
+  } catch {
+    sentences = text.split(/(?<=[.!?。！？])\s*/u).filter(Boolean);
+  }
+  return sentences.flatMap((sentence) => splitLongChunk(sentence, 240));
+}
+
+function splitLongChunk(text, maximumLength) {
+  if (text.length <= maximumLength) return [text];
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > maximumLength) {
+    const candidate = remaining.slice(0, maximumLength + 1);
+    const boundary = Math.max(candidate.lastIndexOf(" "), candidate.lastIndexOf(","), candidate.lastIndexOf("，"));
+    const splitAt = boundary > maximumLength * 0.55 ? boundary + 1 : maximumLength;
+    chunks.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+async function getCompatibleVoiceName(preferredVoiceName, language) {
+  if (!preferredVoiceName) return "";
+  const voices = await chrome.tts.getVoices();
+  const voice = voices.find((item) => item.voiceName === preferredVoiceName);
+  if (!voice) return "";
+  if (voice.eventTypes && !voice.eventTypes.includes("end")) return "";
+  const languageRoot = language.toLowerCase().split("-")[0];
+  return !voice.lang || voice.lang.toLowerCase().startsWith(languageRoot) ? voice.voiceName : "";
+}
+
+async function translateText(text, targetLanguage) {
+  const normalizedText = normalizeText(text);
+  if (!normalizedText || !targetLanguage) throw new Error("Text and target language are required.");
+
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const parameters = new URLSearchParams({ client: "gtx", sl: "auto", tl: targetLanguage, dt: "t", q: normalizedText });
+      const response = await fetch(
+        `https://translate.googleapis.com/translate_a/single?${parameters.toString()}`,
+        { signal: controller.signal }
+      );
+      if (!response.ok) throw new Error("Translation service is unavailable.");
+      const data = await response.json();
+      const translatedText = data[0]?.map((segment) => segment[0]).filter(Boolean).join("");
+      if (!translatedText) throw new Error("No translation was returned.");
+      return translatedText;
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error(lastError?.name === "AbortError" ? "Translation timed out." : lastError?.message || "Translation failed.");
+}
+
+async function detectSpeechLanguage(text, fallbackLanguage) {
+  const scriptLanguage = detectScriptLanguage(text);
+  if (scriptLanguage) return scriptLanguage;
+  try {
+    const result = await chrome.i18n.detectLanguage(text);
+    const detected = result.languages?.[0];
+    if (!result.isReliable || !detected || detected.percentage < 50) return fallbackLanguage;
+    const languageCode = detected.language.toLowerCase();
+    return LANGUAGE_LOCALES[languageCode] || languageCode || fallbackLanguage;
+  } catch {
+    return fallbackLanguage;
+  }
+}
+
+function detectScriptLanguage(text) {
+  if (/\p{Script=Hangul}/u.test(text)) return "ko-KR";
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text)) return "ja-JP";
+  if (/[體萬與專業東絲兩嚴喪個豐臨為麗舉麼義烏樂喬習鄉書買亂爭於虧雲亞產畝親億僅從侖倉儀們價眾優會傘偉傳傷倫偽佇佈]/u.test(text)) return "zh-TW";
+  return null;
+}
+
+function normalizeText(text) {
+  return (text || "").replace(/\s+/g, " ").trim();
+}

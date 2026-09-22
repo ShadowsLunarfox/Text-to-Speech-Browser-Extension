@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Selection Text Reader Settings</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="options-page">
+    <main class="options">
+      <h1>Reading Settings</h1>
+
+      <form id="settingsForm">
+        <label class="toggle-row">
+          <input id="autoDetectLanguage" name="autoDetectLanguage" type="checkbox">
+          <span>Automatically detect selected text language</span>
+        </label>
+
+        <label class="toggle-row">
+          <input id="showSelectionButton" name="showSelectionButton" type="checkbox">
+          <span>Show the on-page selection button</span>
+        </label>
+
+        <label>
+          Fallback language
+          <select id="lang" name="lang">
+            <option value="zh-CN">Chinese (Mandarin)</option>
+            <option value="zh-TW">Chinese (Taiwan)</option>
+            <option value="zh-HK">Chinese (Hong Kong)</option>
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="ja-JP">Japanese</option>
+            <option value="ko-KR">Korean</option>
+          </select>
+        </label>
+
+        <label>
+          Preferred voice
+          <select id="voiceName" name="voiceName">
+            <option value="">Automatic</option>
+          </select>
+        </label>
+
+        <label>
+          Speed
+          <input id="rate" name="rate" type="range" min="0.5" max="2" step="0.1">
+          <span id="rateValue"></span>
+        </label>
+
+        <label>
+          Pitch
+          <input id="pitch" name="pitch" type="range" min="0" max="2" step="0.1">
+          <span id="pitchValue"></span>
+        </label>
+
+        <label>
+          Volume
+          <input id="volume" name="volume" type="range" min="0" max="1" step="0.1">
+          <span id="volumeValue"></span>
+        </label>
+
+        <div class="actions">
+          <button type="submit">Save settings</button>
+          <button id="testButton" type="button">Test voice</button>
+        </div>
+
+        <p id="status" role="status" aria-live="polite"></p>
+      </form>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

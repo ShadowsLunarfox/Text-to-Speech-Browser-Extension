@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Selection Text Reader</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="popup-page">
+    <main class="popup">
+      <h1>Selection Text Reader</h1>
+      <p>Select text on the current web page, then open this menu to read it aloud.</p>
+      <div class="actions">
+        <button id="readButton" type="button">Start reading</button>
+        <button id="pauseButton" type="button" disabled>Pause</button>
+        <button id="stopButton" type="button">Stop reading</button>
+      </div>
+      <p id="readingProgress" class="popup-status"></p>
+      <p id="popupStatus" class="popup-status" role="status" aria-live="polite"></p>
+      <a href="options.html" target="_blank" rel="noreferrer">Voice and speed settings</a>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
