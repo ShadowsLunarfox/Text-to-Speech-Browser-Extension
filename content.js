@@ -29,12 +29,25 @@ let highlightSearchOffset = 0;
 let lastReadingIndex = -1;
 let lastReadingStateSignature = "";
 let ocrDragStart = null;
+let uiLanguage = "en";
 
 document.addEventListener("mousedown", handlePointerDown, true);
 document.addEventListener("mouseup", handleSelectionChange);
 document.addEventListener("keyup", handleSelectionChange);
 document.addEventListener("keydown", handleReadingShortcut, true);
 document.addEventListener("scroll", handleScroll, true);
+loadInterfaceLanguage();
+
+async function loadInterfaceLanguage() {
+  const settings = await safeStorageGet({ uiLanguage: "en" });
+  if (!settings) return;
+  uiLanguage = ReaderI18n.normalizeLanguage(settings.uiLanguage);
+  if (shadow) ReaderI18n.apply(shadow, uiLanguage);
+}
+
+function tr(key, values) {
+  return ReaderI18n.t(key, uiLanguage, values);
+}
 
 function handleSelectionChange(event) {
   if (event.type === "keyup" && event.key.toLowerCase() === "r" && panel && !panel.hidden) {
@@ -196,7 +209,7 @@ async function finishOcrDrag(event) {
   }
 
   cancelOcrSelection();
-  showOcrResult("", "Capturing screen...");
+  showOcrResult("", tr("capturing"));
   host.style.visibility = "hidden";
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
@@ -211,7 +224,7 @@ async function finishOcrDrag(event) {
     showOcrResult("", response.error);
     return;
   }
-  showOcrResult(response.text, response.text ? "Text recognition complete." : "No text was found in this area.");
+  showOcrResult(response.text, tr(response.text ? "recognitionComplete" : "noTextFound"));
 }
 
 function showOcrResult(text, status) {
@@ -230,18 +243,18 @@ async function readOcrText() {
   const text = shadow.querySelector(".ocr-text").value.trim();
   const status = shadow.querySelector(".ocr-status");
   if (!text) {
-    status.textContent = "There is no text to read.";
+    status.textContent = tr("noTextRead");
     return;
   }
   const response = await safeSendMessage({ action: "speak-text", text });
-  if (response) status.textContent = response.started ? "Reading recognized text." : "Unable to start reading.";
+  if (response) status.textContent = tr(response.started ? "readingRecognized" : "unableRead");
 }
 
 async function copyOcrText() {
   const textArea = shadow.querySelector(".ocr-text");
   const status = shadow.querySelector(".ocr-status");
   if (!textArea.value.trim()) {
-    status.textContent = "There is no text to copy.";
+    status.textContent = tr("noTextCopy");
     return;
   }
   try {
@@ -250,7 +263,7 @@ async function copyOcrText() {
     textArea.select();
     document.execCommand("copy");
   }
-  status.textContent = "Text copied to the clipboard.";
+  status.textContent = tr("copied");
 }
 
 function handleScroll(event) {
@@ -352,46 +365,46 @@ function ensureOverlay() {
       .ocr-text { display: block; width: calc(100% - 16px); min-height: 180px; max-height: 50vh; margin: 8px; padding: 6px; resize: vertical; color: #000; background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080; border-radius: 0; font: 13px Tahoma, Arial, sans-serif; line-height: 1.4; }
       .ocr-status { min-height: 20px; margin: 8px 8px 0; padding: 3px 5px; background: #fff; border: 1px solid; border-color: #808080 #fff #fff #808080; }
     </style>
-    <button class="launcher" type="button" title="Open reading panel" hidden>R</button>
+    <button class="launcher" type="button" data-i18n-title="openReadingPanel" title="Open reading panel" hidden>R</button>
     <section class="mini-player" hidden>
-      <div class="mini-header">Selection Reader</div>
+      <div class="mini-header" data-i18n="appName">Selection Text Reader</div>
       <div class="mini-controls">
-        <button class="action mini-previous" type="button" title="Previous sentence">Previous</button>
-        <button class="action mini-pause" type="button">Pause</button>
-        <button class="action mini-next" type="button" title="Next sentence">Next</button>
-        <button class="action mini-stop" type="button">Stop</button>
+        <button class="action mini-previous" type="button" data-i18n="previous">Previous</button>
+        <button class="action mini-pause" type="button" data-i18n="pause">Pause</button>
+        <button class="action mini-next" type="button" data-i18n="next">Next</button>
+        <button class="action mini-stop" type="button" data-i18n="stop">Stop</button>
       </div>
       <div class="mini-progress"></div>
     </section>
     <div class="ocr-overlay" hidden>
-      <div class="ocr-instruction">Drag to select an area. Press Esc to cancel.</div>
+      <div class="ocr-instruction" data-i18n="dragToScan">Drag to select an area. Press Esc to cancel.</div>
       <div class="ocr-selection" hidden></div>
     </div>
     <section class="ocr-result" hidden>
-      <div class="header"><span class="title">Screen Text Scanner</span><button class="close ocr-close" type="button" title="Close">x</button></div>
-      <textarea class="ocr-text" aria-label="Recognized text"></textarea>
+      <div class="header"><span class="title" data-i18n="screenScanner">Screen Text Scanner</span><button class="close ocr-close" type="button" data-i18n-title="close" title="Close">x</button></div>
+      <textarea class="ocr-text" data-i18n-aria-label="recognizedText" aria-label="Recognized text"></textarea>
       <div class="actions">
-        <button class="action ocr-read" type="button">Read text</button>
-        <button class="action ocr-copy" type="button">Copy text</button>
-        <button class="action ocr-rescan" type="button">Scan again</button>
+        <button class="action ocr-read" type="button" data-i18n="readText">Read text</button>
+        <button class="action ocr-copy" type="button" data-i18n="copyText">Copy text</button>
+        <button class="action ocr-rescan" type="button" data-i18n="scanAgain">Scan again</button>
       </div>
       <div class="ocr-status" role="status" aria-live="polite"></div>
     </section>
     <section class="panel" hidden>
-      <div class="header"><span class="title">Selection Reader</span><button class="close" type="button" title="Close">x</button></div>
+      <div class="header"><span class="title" data-i18n="appName">Selection Text Reader</span><button class="close" type="button" data-i18n-title="close" title="Close">x</button></div>
       <p class="text"></p>
       <div class="actions">
-        <button class="action read-original" type="button">Read original</button>
-        <button class="action secondary stop" type="button">Stop</button>
+        <button class="action read-original" type="button" data-i18n="readOriginal">Read original</button>
+        <button class="action secondary stop" type="button" data-i18n="stop">Stop</button>
       </div>
       <div class="actions playback" hidden>
-        <button class="action secondary previous" type="button">Previous</button>
-        <button class="action secondary pause" type="button">Pause</button>
-        <button class="action secondary next" type="button">Next</button>
+        <button class="action secondary previous" type="button" data-i18n="previous">Previous</button>
+        <button class="action secondary pause" type="button" data-i18n="pause">Pause</button>
+        <button class="action secondary next" type="button" data-i18n="next">Next</button>
       </div>
       <p class="current" hidden></p>
-      <label class="label">Translate to<select class="language"></select></label>
-      <button class="action translate" type="button">Translate and read</button>
+      <label class="label"><span data-i18n="translateTo">Translate to</span><select class="language"></select></label>
+      <button class="action translate" type="button" data-i18n="translateRead">Translate and read</button>
       <p class="translation" hidden></p>
       <p class="status" role="status" aria-live="polite"></p>
     </section>
@@ -402,10 +415,17 @@ function ensureOverlay() {
   panel = shadow.querySelector(".panel");
   statusElement = shadow.querySelector(".status");
   translationElement = shadow.querySelector(".translation");
+  ReaderI18n.apply(shadow, uiLanguage);
 
   const languageSelect = shadow.querySelector(".language");
+  let languageNames;
+  try {
+    languageNames = new Intl.DisplayNames([uiLanguage], { type: "language" });
+  } catch {
+    languageNames = null;
+  }
   for (const [value, label] of TARGET_LANGUAGES) {
-    languageSelect.add(new Option(label, value));
+    languageSelect.add(new Option(languageNames?.of(value) || label, value));
   }
   safeStorageGet({ translationTarget: "en" }).then((settings) => {
     if (settings) languageSelect.value = settings.translationTarget;
@@ -469,13 +489,13 @@ function openPanel() {
 async function readOriginal() {
   const response = await safeSendMessage({ action: "speak-text", text: selectedText });
   if (!response) return;
-  statusElement.textContent = response?.started ? "Reading original text." : "Unable to start reading.";
+  statusElement.textContent = tr(response?.started ? "readingOriginal" : "unableRead");
 }
 
 async function stopReading() {
   const response = await safeSendMessage({ action: "stop-reading" });
   if (!response) return;
-  statusElement.textContent = "Reading stopped.";
+  statusElement.textContent = tr("readingStopped");
 }
 
 async function togglePause() {
@@ -504,8 +524,8 @@ function renderReadingState(state) {
   playback.hidden = !state?.active;
   current.hidden = !state?.active;
   miniPlayer.hidden = !state?.active;
-  pause.textContent = state?.paused ? "Resume" : "Pause";
-  miniPause.textContent = state?.paused ? "Resume" : "Pause";
+  pause.textContent = tr(state?.paused ? "resume" : "pause");
+  miniPause.textContent = tr(state?.paused ? "resume" : "pause");
   current.textContent = state?.active
     ? `${state.index + 1} / ${state.total}: ${state.currentText}`
     : "";
@@ -635,7 +655,7 @@ async function translateAndRead() {
   const button = shadow.querySelector(".translate");
   const targetLanguage = shadow.querySelector(".language").value;
   button.disabled = true;
-  statusElement.textContent = "Translating...";
+  statusElement.textContent = tr("translating");
 
   try {
     const response = await safeSendMessage({
@@ -645,7 +665,7 @@ async function translateAndRead() {
     });
 
     if (response?.error || !response?.translatedText) {
-      throw new Error(response?.error || "Translation failed.");
+      throw new Error(response?.error || tr("translationFailed"));
     }
 
     translationElement.textContent = response.translatedText;
@@ -656,9 +676,9 @@ async function translateAndRead() {
       lang: targetLanguage
     });
     if (!readingResponse) return;
-    statusElement.textContent = "Reading translated text.";
+    statusElement.textContent = tr("readingTranslation");
   } catch (error) {
-    if (statusElement) statusElement.textContent = error.message || "Translation failed.";
+    if (statusElement) statusElement.textContent = error.message || tr("translationFailed");
   } finally {
     if (button.isConnected) button.disabled = false;
   }
@@ -724,6 +744,12 @@ function invalidateExtensionContext() {
   translationElement = null;
 }
 
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "sync" || !changes.uiLanguage) return;
+  uiLanguage = ReaderI18n.normalizeLanguage(changes.uiLanguage.newValue);
+  if (shadow) ReaderI18n.apply(shadow, uiLanguage);
+});
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === "reading-state") {
     renderReadingState(message.state);
@@ -735,7 +761,7 @@ chrome.runtime.onMessage.addListener((message) => {
   }
   if (message.action === "ocr-captured") {
     if (host) host.style.visibility = "visible";
-    showOcrResult("", "Loading OCR language model...");
+    showOcrResult("", tr("loadingOcr"));
     return;
   }
   if (message.action === "ocr-progress" && shadow) {

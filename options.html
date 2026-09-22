@@ -8,21 +8,35 @@
   </head>
   <body class="options-page">
     <main class="options">
-      <h1>Reading Settings</h1>
+      <h1 data-i18n="settingsTitle">Reading Settings</h1>
 
       <form id="settingsForm">
+        <button id="backButton" class="back-button" type="button" data-i18n="back" hidden>Back</button>
+
+        <label>
+          <span data-i18n="interfaceLanguage">Interface language</span>
+          <select id="uiLanguage" name="uiLanguage">
+            <option value="en">English</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="ms">Bahasa Melayu</option>
+          </select>
+        </label>
+
         <label class="toggle-row">
           <input id="autoDetectLanguage" name="autoDetectLanguage" type="checkbox">
-          <span>Automatically detect selected text language</span>
+          <span data-i18n="autoDetect">Automatically detect selected text language</span>
         </label>
 
         <label class="toggle-row">
           <input id="showSelectionButton" name="showSelectionButton" type="checkbox">
-          <span>Show the on-page selection button</span>
+          <span data-i18n="showSelectionButton">Show the on-page selection button</span>
         </label>
 
         <label>
-          Fallback language
+          <span data-i18n="fallbackLanguage">Fallback language</span>
           <select id="lang" name="lang">
             <option value="zh-CN">Chinese (Mandarin)</option>
             <option value="zh-TW">Chinese (Taiwan)</option>
@@ -35,24 +49,24 @@
         </label>
 
         <label>
-          Default voice
+          <span data-i18n="defaultVoice">Default voice</span>
           <select id="voiceName" name="voiceName">
-            <option value="">Automatic</option>
+            <option value="" data-i18n="automatic">Automatic</option>
           </select>
         </label>
 
         <fieldset>
-          <legend>Voices by language</legend>
+          <legend data-i18n="voicesByLanguage">Voices by language</legend>
           <div class="voice-grid">
-            <label>Chinese<select class="language-voice" data-language="zh"><option value="">Use default</option></select></label>
-            <label>English<select class="language-voice" data-language="en"><option value="">Use default</option></select></label>
-            <label>Japanese<select class="language-voice" data-language="ja"><option value="">Use default</option></select></label>
-            <label>Korean<select class="language-voice" data-language="ko"><option value="">Use default</option></select></label>
+            <label><span data-i18n="chinese">Chinese</span><select class="language-voice" data-language="zh"><option value="" data-i18n="useDefault">Use default</option></select></label>
+            <label><span data-i18n="english">English</span><select class="language-voice" data-language="en"><option value="" data-i18n="useDefault">Use default</option></select></label>
+            <label><span data-i18n="japanese">Japanese</span><select class="language-voice" data-language="ja"><option value="" data-i18n="useDefault">Use default</option></select></label>
+            <label><span data-i18n="korean">Korean</span><select class="language-voice" data-language="ko"><option value="" data-i18n="useDefault">Use default</option></select></label>
           </div>
         </fieldset>
 
         <label>
-          Screen OCR language
+          <span data-i18n="ocrLanguage">Screen OCR language</span>
           <select id="ocrLanguage" name="ocrLanguage">
             <option value="eng">English</option>
             <option value="chi_sim">Chinese (Simplified)</option>
@@ -65,31 +79,32 @@
         </label>
 
         <label>
-          Speed
+          <span data-i18n="speed">Speed</span>
           <input id="rate" name="rate" type="range" min="0.5" max="2" step="0.1">
           <span id="rateValue"></span>
         </label>
 
         <label>
-          Pitch
+          <span data-i18n="pitch">Pitch</span>
           <input id="pitch" name="pitch" type="range" min="0" max="2" step="0.1">
           <span id="pitchValue"></span>
         </label>
 
         <label>
-          Volume
+          <span data-i18n="volume">Volume</span>
           <input id="volume" name="volume" type="range" min="0" max="1" step="0.1">
           <span id="volumeValue"></span>
         </label>
 
         <div class="actions">
-          <button type="submit">Save settings</button>
-          <button id="testButton" type="button">Test voice</button>
+          <button type="submit" data-i18n="saveSettings">Save settings</button>
+          <button id="testButton" type="button" data-i18n="testVoice">Test voice</button>
         </div>
 
         <p id="status" role="status" aria-live="polite"></p>
       </form>
     </main>
+    <script src="i18n.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

@@ -1,17 +1,27 @@
 const statusElement = document.getElementById("popupStatus");
 const progressElement = document.getElementById("readingProgress");
 const pauseButton = document.getElementById("pauseButton");
+let uiLanguage = "en";
 
-refreshReadingState();
+initializePopup();
+
+async function initializePopup() {
+  const settings = await chrome.storage.sync.get({ uiLanguage: "en" });
+  uiLanguage = ReaderI18n.normalizeLanguage(settings.uiLanguage);
+  document.documentElement.lang = uiLanguage;
+  document.title = ReaderI18n.t("appName", uiLanguage);
+  ReaderI18n.apply(document, uiLanguage);
+  await refreshReadingState();
+}
 
 document.getElementById("readButton").addEventListener("click", async () => {
-  showStatus("Reading selected text...");
+  showStatus(ReaderI18n.t("readingSelected", uiLanguage));
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     if (!tab?.id) {
-      showStatus("No active page found.");
+      showStatus(ReaderI18n.t("noActivePage", uiLanguage));
       return;
     }
 
@@ -31,7 +41,7 @@ document.getElementById("readButton").addEventListener("click", async () => {
     });
 
     if (!selectedText.trim()) {
-      showStatus("Select some text on the page first.");
+      showStatus(ReaderI18n.t("selectTextFirst", uiLanguage));
       return;
     }
 
@@ -41,9 +51,9 @@ document.getElementById("readButton").addEventListener("click", async () => {
       tabId: tab.id
     });
 
-    showStatus(response?.started ? "Reading started." : "Unable to read the selection.");
+    showStatus(ReaderI18n.t(response?.started ? "readingStarted" : "unableRead", uiLanguage));
   } catch {
-    showStatus("This page does not allow access to selected text.");
+    showStatus(ReaderI18n.t("pageAccessDenied", uiLanguage));
   }
 });
 
@@ -54,20 +64,20 @@ pauseButton.addEventListener("click", async () => {
 
 document.getElementById("stopButton").addEventListener("click", async () => {
   await chrome.runtime.sendMessage({ action: "stop-reading" });
-  showStatus("Reading stopped.");
+  showStatus(ReaderI18n.t("readingStopped", uiLanguage));
 });
 
 document.getElementById("scanButton").addEventListener("click", async () => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) {
-      showStatus("No active page found.");
+      showStatus(ReaderI18n.t("noActivePage", uiLanguage));
       return;
     }
     await chrome.tabs.sendMessage(tab.id, { action: "start-ocr-selection" });
     window.close();
   } catch {
-    showStatus("Refresh this page before using screen scan.");
+    showStatus(ReaderI18n.t("refreshBeforeScan", uiLanguage));
   }
 });
 
@@ -81,9 +91,9 @@ async function refreshReadingState() {
 
 function renderReadingState(state) {
   pauseButton.disabled = !state?.active;
-  pauseButton.textContent = state?.paused ? "Resume" : "Pause";
+  pauseButton.textContent = ReaderI18n.t(state?.paused ? "resume" : "pause", uiLanguage);
   progressElement.textContent = state?.active
-    ? `Sentence ${state.index + 1} of ${state.total}`
+    ? ReaderI18n.t("sentenceProgress", uiLanguage, { current: state.index + 1, total: state.total })
     : "";
 }
 

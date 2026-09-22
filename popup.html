@@ -8,18 +8,19 @@
   </head>
   <body class="popup-page">
     <main class="popup">
-      <h1>Selection Text Reader</h1>
-      <p>Select text on the current web page, then open this menu to read it aloud.</p>
+      <h1 data-i18n="appName">Selection Text Reader</h1>
+      <p data-i18n="intro">Select text on the current web page, then open this menu to read it aloud.</p>
       <div class="actions">
-        <button id="readButton" type="button">Start reading</button>
-        <button id="pauseButton" type="button" disabled>Pause</button>
-        <button id="stopButton" type="button">Stop reading</button>
-        <button id="scanButton" type="button">Scan screen text</button>
+        <button id="readButton" type="button" data-i18n="startReading">Start reading</button>
+        <button id="pauseButton" type="button" data-i18n="pause" disabled>Pause</button>
+        <button id="stopButton" type="button" data-i18n="stopReading">Stop reading</button>
+        <button id="scanButton" type="button" data-i18n="scanScreenText">Scan screen text</button>
       </div>
       <p id="readingProgress" class="popup-status"></p>
       <p id="popupStatus" class="popup-status" role="status" aria-live="polite"></p>
-      <a href="options.html" target="_blank" rel="noreferrer">Voice and speed settings</a>
+      <a href="options.html?popup=1" data-i18n="voiceSettings">Voice and speed settings</a>
     </main>
+    <script src="i18n.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

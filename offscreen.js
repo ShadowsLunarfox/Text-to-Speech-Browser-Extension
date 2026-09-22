@@ -35,7 +35,7 @@ async function getWorker(languages) {
     workerPath: chrome.runtime.getURL("vendor/tesseract/worker.min.js"),
     workerBlobURL: false,
     corePath: chrome.runtime.getURL("vendor/tesseract/tesseract-core-simd-lstm.wasm.js"),
-    langPath: "https://tessdata.projectnaptha.com/4.0.0",
+    cachePath: "selection-reader-lstm-v1",
     logger: (progress) => {
       if (!activeRequestId) return;
       chrome.runtime.sendMessage({

@@ -1,4 +1,5 @@
 const DEFAULT_SETTINGS = {
+  uiLanguage: "en",
   rate: 1,
   pitch: 1,
   volume: 1,
@@ -13,6 +14,7 @@ const DEFAULT_SETTINGS = {
 const form = document.getElementById("settingsForm");
 const statusElement = document.getElementById("status");
 const controls = {
+  uiLanguage: document.getElementById("uiLanguage"),
   autoDetectLanguage: document.getElementById("autoDetectLanguage"),
   showSelectionButton: document.getElementById("showSelectionButton"),
   lang: document.getElementById("lang"),
@@ -28,12 +30,20 @@ const valueLabels = {
   volume: document.getElementById("volumeValue")
 };
 const languageVoiceControls = [...document.querySelectorAll(".language-voice")];
+const isPopupView = new URLSearchParams(window.location.search).get("popup") === "1";
+
+if (isPopupView) {
+  document.body.classList.add("options-popup");
+  document.getElementById("backButton").hidden = false;
+}
 
 init();
 
 async function init() {
   const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
 
+  controls.uiLanguage.value = settings.uiLanguage;
+  applyInterfaceLanguage(settings.uiLanguage);
   await populateVoices();
 
   controls.autoDetectLanguage.checked = settings.autoDetectLanguage;
@@ -53,10 +63,19 @@ async function init() {
 
 form.addEventListener("input", updateValueLabels);
 
+controls.uiLanguage.addEventListener("change", async () => {
+  await chrome.storage.sync.set({ uiLanguage: controls.uiLanguage.value });
+  applyInterfaceLanguage(controls.uiLanguage.value);
+});
+
+document.getElementById("backButton").addEventListener("click", () => {
+  window.location.href = "popup.html";
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   await saveSettings();
-  showStatus("Settings saved");
+  showStatus(ReaderI18n.t("settingsSaved", controls.uiLanguage.value));
 });
 
 document.getElementById("testButton").addEventListener("click", async () => {
@@ -77,6 +96,7 @@ document.getElementById("testButton").addEventListener("click", async () => {
 
 async function saveSettings() {
   const settings = {
+    uiLanguage: controls.uiLanguage.value,
     autoDetectLanguage: controls.autoDetectLanguage.checked,
     showSelectionButton: controls.showSelectionButton.checked,
     lang: controls.lang.value,
@@ -92,6 +112,12 @@ async function saveSettings() {
 
   await chrome.storage.sync.set(settings);
   return settings;
+}
+
+function applyInterfaceLanguage(language) {
+  document.documentElement.lang = language;
+  document.title = ReaderI18n.t("settingsTitle", language);
+  ReaderI18n.apply(document, language);
 }
 
 async function populateVoices() {

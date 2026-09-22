@@ -23,6 +23,33 @@ body.options-page {
   background: #008080;
 }
 
+body.options-page.options-popup {
+  width: 540px;
+  min-width: 540px;
+  max-height: 600px;
+  padding: 0;
+  overflow-y: auto;
+  background: #c0c0c0;
+}
+
+.options-popup .options {
+  width: 100%;
+  margin: 0;
+}
+
+.options-popup form {
+  gap: 11px;
+  padding: 11px;
+}
+
+.back-button {
+  width: fit-content;
+}
+
+body.popup-page {
+  min-height: 0;
+}
+
 .popup,
 .options {
   color: #000000;
@@ -34,8 +61,8 @@ body.options-page {
 
 .popup {
   width: 320px;
-  min-height: 220px;
-  padding: 3px 3px 12px;
+  min-height: 0;
+  padding: 3px 3px 9px;
 }
 
 .options {
@@ -66,7 +93,8 @@ h1 {
 }
 
 .popup > p:first-of-type {
-  margin-top: 12px;
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
 p {
@@ -230,11 +258,31 @@ a:visited {
 }
 
 .popup-status {
-  min-height: 17px;
-  margin-top: 8px;
+  min-height: 0;
+  margin-top: 6px;
   margin-bottom: 0;
   padding: 2px 4px;
   font-size: 11px;
+}
+
+.popup-status:empty {
+  display: none;
+}
+
+.popup .actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.popup .actions button {
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+}
+
+.popup > a {
+  margin-top: 10px;
 }
 
 #readingProgress:not(:empty),
