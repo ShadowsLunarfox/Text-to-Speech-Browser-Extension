@@ -1,8 +1,9 @@
 const READING_MENU_ID = "toggle-reading";
 const TERMINAL_TTS_EVENTS = new Set(["end", "interrupted", "cancelled", "error"]);
 const DEFAULT_SETTINGS = {
-  rate: 1, pitch: 1, volume: 1, lang: "zh-CN", voiceName: "",
-  autoDetectLanguage: true, showSelectionButton: true, translationTarget: "en"
+  rate: 1, pitch: 1, volume: 1, lang: "zh-CN", voiceName: "", languageVoices: {},
+  autoDetectLanguage: true, showSelectionButton: true, translationTarget: "en",
+  ocrLanguage: "eng+chi_sim"
 };
 const LANGUAGE_LOCALES = {
   ar: "ar-SA", de: "de-DE", en: "en-US", es: "es-ES", fr: "fr-FR",
@@ -14,6 +15,9 @@ const reading = {
   active: false, paused: false, chunks: [], index: 0, language: "",
   options: null, session: 0, tabId: null
 };
+const pendingOcrRequests = new Map();
+let creatingOffscreenDocument = null;
+let activeOcrPromise = null;
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureDefaultSettings();
@@ -63,6 +67,32 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.target === "background" && message.action === "ocr-progress") {
+    const request = pendingOcrRequests.get(message.requestId);
+    if (request?.tabId) {
+      chrome.tabs.sendMessage(request.tabId, {
+        action: "ocr-progress",
+        status: message.status,
+        progress: message.progress
+      }).catch(() => {});
+    }
+    return;
+  }
+  if (message.target === "background" && message.action === "ocr-result") {
+    const request = pendingOcrRequests.get(message.requestId);
+    if (request) {
+      clearTimeout(request.timeout);
+      pendingOcrRequests.delete(message.requestId);
+      message.error ? request.reject(new Error(message.error)) : request.resolve(message.text || "");
+    }
+    return;
+  }
+  if (message.action === "capture-region") {
+    runOcrRequest(message, sender)
+      .then((text) => sendResponse({ text }))
+      .catch((error) => sendResponse({ error: error.message || "OCR failed." }));
+    return true;
+  }
   if (message.action === "speak-text") {
     speakText(message.text, message.lang, message.tabId || sender.tab?.id)
       .then((started) => sendResponse({ started }));
@@ -95,6 +125,70 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+async function runOcrRequest(message, sender) {
+  if (activeOcrPromise) throw new Error("Text recognition is already running.");
+  activeOcrPromise = captureAndRecognizeRegion(message, sender);
+  try {
+    return await activeOcrPromise;
+  } finally {
+    activeOcrPromise = null;
+  }
+}
+
+async function captureAndRecognizeRegion(message, sender) {
+  if (!sender.tab?.windowId || !sender.tab?.id) throw new Error("No active tab is available.");
+  const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+  const imageDataUrl = await chrome.tabs.captureVisibleTab(sender.tab.windowId, { format: "png" });
+  chrome.tabs.sendMessage(sender.tab.id, { action: "ocr-captured" }).catch(() => {});
+  await ensureOffscreenDocument();
+
+  const requestId = crypto.randomUUID();
+  const languages = String(settings.ocrLanguage || "eng+chi_sim")
+    .split("+")
+    .filter((language) => ["eng", "chi_sim", "chi_tra", "jpn", "kor"].includes(language));
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingOcrRequests.delete(requestId);
+      reject(new Error("OCR timed out. Please try a smaller area."));
+    }, 180000);
+    pendingOcrRequests.set(requestId, { resolve, reject, timeout, tabId: sender.tab.id });
+    chrome.runtime.sendMessage({
+      target: "offscreen",
+      action: "ocr-recognize",
+      requestId,
+      imageDataUrl,
+      rectangle: message.rectangle,
+      viewport: message.viewport,
+      languages: languages.length ? languages : ["eng"]
+    }).catch((error) => {
+      clearTimeout(timeout);
+      pendingOcrRequests.delete(requestId);
+      reject(error);
+    });
+  });
+}
+
+async function ensureOffscreenDocument() {
+  const offscreenUrl = chrome.runtime.getURL("offscreen.html");
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: ["OFFSCREEN_DOCUMENT"],
+    documentUrls: [offscreenUrl]
+  });
+  if (contexts.length) return;
+
+  if (!creatingOffscreenDocument) {
+    creatingOffscreenDocument = chrome.offscreen.createDocument({
+      url: "offscreen.html",
+      reasons: ["WORKERS"],
+      justification: "Run local OCR on a user-selected screenshot region."
+    }).finally(() => {
+      creatingOffscreenDocument = null;
+    });
+  }
+  await creatingOffscreenDocument;
+}
+
 async function ensureDefaultSettings() {
   const savedSettings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
   await chrome.storage.sync.set(savedSettings);
@@ -114,7 +208,9 @@ async function speakText(rawText, requestedLanguage, tabId) {
   const language = requestedLanguage || (settings.autoDetectLanguage
     ? await detectSpeechLanguage(text, settings.lang)
     : settings.lang);
-  const voiceName = await getCompatibleVoiceName(settings.voiceName, language);
+  const languageRoot = language.toLowerCase().split("-")[0];
+  const preferredVoice = settings.languageVoices?.[languageRoot] || settings.voiceName;
+  const voiceName = await getCompatibleVoiceName(preferredVoice, language);
 
   reading.session += 1;
   chrome.tts.stop();

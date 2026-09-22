@@ -35,9 +35,32 @@
         </label>
 
         <label>
-          Preferred voice
+          Default voice
           <select id="voiceName" name="voiceName">
             <option value="">Automatic</option>
+          </select>
+        </label>
+
+        <fieldset>
+          <legend>Voices by language</legend>
+          <div class="voice-grid">
+            <label>Chinese<select class="language-voice" data-language="zh"><option value="">Use default</option></select></label>
+            <label>English<select class="language-voice" data-language="en"><option value="">Use default</option></select></label>
+            <label>Japanese<select class="language-voice" data-language="ja"><option value="">Use default</option></select></label>
+            <label>Korean<select class="language-voice" data-language="ko"><option value="">Use default</option></select></label>
+          </div>
+        </fieldset>
+
+        <label>
+          Screen OCR language
+          <select id="ocrLanguage" name="ocrLanguage">
+            <option value="eng">English</option>
+            <option value="chi_sim">Chinese (Simplified)</option>
+            <option value="chi_tra">Chinese (Traditional)</option>
+            <option value="eng+chi_sim">English + Simplified Chinese</option>
+            <option value="eng+chi_tra">English + Traditional Chinese</option>
+            <option value="jpn+eng">Japanese + English</option>
+            <option value="kor+eng">Korean + English</option>
           </select>
         </label>
 

@@ -4,8 +4,10 @@ const DEFAULT_SETTINGS = {
   volume: 1,
   lang: "zh-CN",
   voiceName: "",
+  languageVoices: {},
   autoDetectLanguage: true,
-  showSelectionButton: true
+  showSelectionButton: true,
+  ocrLanguage: "eng+chi_sim"
 };
 
 const form = document.getElementById("settingsForm");
@@ -15,6 +17,7 @@ const controls = {
   showSelectionButton: document.getElementById("showSelectionButton"),
   lang: document.getElementById("lang"),
   voiceName: document.getElementById("voiceName"),
+  ocrLanguage: document.getElementById("ocrLanguage"),
   rate: document.getElementById("rate"),
   pitch: document.getElementById("pitch"),
   volume: document.getElementById("volume")
@@ -24,6 +27,7 @@ const valueLabels = {
   pitch: document.getElementById("pitchValue"),
   volume: document.getElementById("volumeValue")
 };
+const languageVoiceControls = [...document.querySelectorAll(".language-voice")];
 
 init();
 
@@ -36,6 +40,10 @@ async function init() {
   controls.showSelectionButton.checked = settings.showSelectionButton;
   controls.lang.value = settings.lang;
   controls.voiceName.value = settings.voiceName;
+  controls.ocrLanguage.value = settings.ocrLanguage;
+  for (const control of languageVoiceControls) {
+    control.value = settings.languageVoices?.[control.dataset.language] || "";
+  }
   controls.rate.value = settings.rate;
   controls.pitch.value = settings.pitch;
   controls.volume.value = settings.volume;
@@ -53,6 +61,8 @@ form.addEventListener("submit", async (event) => {
 
 document.getElementById("testButton").addEventListener("click", async () => {
   const settings = await saveSettings();
+  const languageRoot = settings.lang.toLowerCase().split("-")[0];
+  const testVoice = settings.languageVoices[languageRoot] || settings.voiceName;
 
   chrome.tts.stop();
   chrome.tts.speak("This is a text-to-speech test.", {
@@ -61,7 +71,7 @@ document.getElementById("testButton").addEventListener("click", async () => {
     rate: settings.rate,
     pitch: settings.pitch,
     volume: settings.volume,
-    ...(settings.voiceName ? { voiceName: settings.voiceName } : {})
+    ...(testVoice ? { voiceName: testVoice } : {})
   });
 });
 
@@ -71,6 +81,10 @@ async function saveSettings() {
     showSelectionButton: controls.showSelectionButton.checked,
     lang: controls.lang.value,
     voiceName: controls.voiceName.value,
+    ocrLanguage: controls.ocrLanguage.value,
+    languageVoices: Object.fromEntries(
+      languageVoiceControls.map((control) => [control.dataset.language, control.value])
+    ),
     rate: Number(controls.rate.value),
     pitch: Number(controls.pitch.value),
     volume: Number(controls.volume.value)
@@ -82,11 +96,18 @@ async function saveSettings() {
 
 async function populateVoices() {
   const voices = await chrome.tts.getVoices();
-  for (const voice of voices.sort((a, b) => (a.lang || "").localeCompare(b.lang || ""))) {
+  const sortedVoices = voices.sort((a, b) => (a.lang || "").localeCompare(b.lang || ""));
+  for (const voice of sortedVoices) {
     const option = document.createElement("option");
     option.value = voice.voiceName;
     option.textContent = `${voice.voiceName}${voice.lang ? ` (${voice.lang})` : ""}`;
     controls.voiceName.appendChild(option);
+
+    for (const control of languageVoiceControls) {
+      if (!voice.lang || voice.lang.toLowerCase().startsWith(control.dataset.language)) {
+        control.appendChild(option.cloneNode(true));
+      }
+    }
   }
 }
 

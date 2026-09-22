@@ -57,6 +57,20 @@ document.getElementById("stopButton").addEventListener("click", async () => {
   showStatus("Reading stopped.");
 });
 
+document.getElementById("scanButton").addEventListener("click", async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) {
+      showStatus("No active page found.");
+      return;
+    }
+    await chrome.tabs.sendMessage(tab.id, { action: "start-ocr-selection" });
+    window.close();
+  } catch {
+    showStatus("Refresh this page before using screen scan.");
+  }
+});
+
 function showStatus(message) {
   statusElement.textContent = message;
 }

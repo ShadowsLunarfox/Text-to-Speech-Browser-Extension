@@ -23,6 +23,11 @@ A simple Chrome and Edge extension that reads selected text aloud from the exten
 - Pause, resume, previous sentence, next sentence, and reading progress are available in the on-page panel.
 - Text selected inside standard input fields and text areas is supported.
 - The settings page can select an installed voice and disable the on-page selection button.
+- The current sentence is highlighted on the original web page while it is spoken.
+- A fixed Windows 98-style mini player appears during reading.
+- Chinese, English, Japanese, and Korean can each use a different preferred voice.
+- **Scan screen text** lets you drag over part of the current tab, recognize text locally with Tesseract.js, then read or copy the result.
+- OCR screenshots stay on the device. Language model files are downloaded on demand and cached by the browser.
 
 ## Keyboard shortcuts
 

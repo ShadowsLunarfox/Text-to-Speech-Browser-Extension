@@ -24,6 +24,11 @@ let statusElement;
 let translationElement;
 let selectionTimer;
 let contextActive = true;
+let selectedRange = null;
+let highlightSearchOffset = 0;
+let lastReadingIndex = -1;
+let lastReadingStateSignature = "";
+let ocrDragStart = null;
 
 document.addEventListener("mousedown", handlePointerDown, true);
 document.addEventListener("mouseup", handleSelectionChange);
@@ -63,6 +68,10 @@ function handleSelectionChange(event) {
     }
 
     selectedText = text;
+    clearReadingHighlight();
+    selectedRange = selectionDetails.range;
+    highlightSearchOffset = 0;
+    lastReadingIndex = -1;
     ensureOverlay();
     positionLauncher(rect);
     panel.hidden = true;
@@ -79,7 +88,8 @@ function getSelectionDetails() {
   ) {
     return {
       text: active.value.slice(active.selectionStart, active.selectionEnd).trim(),
-      rect: active.getBoundingClientRect()
+      rect: active.getBoundingClientRect(),
+      range: null
     };
   }
 
@@ -87,7 +97,8 @@ function getSelectionDetails() {
   if (!selection?.rangeCount) return { text: "", rect: null };
   return {
     text: selection.toString().trim(),
-    rect: selection.getRangeAt(0).getBoundingClientRect()
+    rect: selection.getRangeAt(0).getBoundingClientRect(),
+    range: selection.getRangeAt(0).cloneRange()
   };
 }
 
@@ -101,6 +112,12 @@ function handlePointerDown(event) {
 }
 
 function handleReadingShortcut(event) {
+  if (event.key === "Escape" && shadow && !shadow.querySelector(".ocr-overlay").hidden) {
+    event.preventDefault();
+    cancelOcrSelection();
+    return;
+  }
+
   if (
     event.key.toLowerCase() !== "r" ||
     event.ctrlKey ||
@@ -117,6 +134,123 @@ function handleReadingShortcut(event) {
   event.stopPropagation();
   window.clearTimeout(selectionTimer);
   openPanel();
+}
+
+function startOcrSelection() {
+  ensureOverlay();
+  const overlay = shadow.querySelector(".ocr-overlay");
+  const selectionBox = shadow.querySelector(".ocr-selection");
+  shadow.querySelector(".ocr-result").hidden = true;
+  panel.hidden = true;
+  launcher.hidden = true;
+  selectionBox.hidden = true;
+  ocrDragStart = null;
+  overlay.hidden = false;
+}
+
+function cancelOcrSelection() {
+  if (!shadow) return;
+  shadow.querySelector(".ocr-overlay").hidden = true;
+  shadow.querySelector(".ocr-selection").hidden = true;
+  ocrDragStart = null;
+}
+
+function beginOcrDrag(event) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  ocrDragStart = { x: event.clientX, y: event.clientY };
+  event.currentTarget.setPointerCapture(event.pointerId);
+  updateOcrSelectionBox(event.clientX, event.clientY);
+}
+
+function updateOcrDrag(event) {
+  if (!ocrDragStart) return;
+  event.preventDefault();
+  updateOcrSelectionBox(event.clientX, event.clientY);
+}
+
+function updateOcrSelectionBox(x, y) {
+  const box = shadow.querySelector(".ocr-selection");
+  const left = Math.min(ocrDragStart.x, x);
+  const top = Math.min(ocrDragStart.y, y);
+  box.style.left = `${left}px`;
+  box.style.top = `${top}px`;
+  box.style.width = `${Math.abs(x - ocrDragStart.x)}px`;
+  box.style.height = `${Math.abs(y - ocrDragStart.y)}px`;
+  box.hidden = false;
+}
+
+async function finishOcrDrag(event) {
+  if (!ocrDragStart) return;
+  const rectangle = {
+    left: Math.min(ocrDragStart.x, event.clientX),
+    top: Math.min(ocrDragStart.y, event.clientY),
+    width: Math.abs(event.clientX - ocrDragStart.x),
+    height: Math.abs(event.clientY - ocrDragStart.y)
+  };
+  ocrDragStart = null;
+
+  if (rectangle.width < 12 || rectangle.height < 12) {
+    cancelOcrSelection();
+    return;
+  }
+
+  cancelOcrSelection();
+  showOcrResult("", "Capturing screen...");
+  host.style.visibility = "hidden";
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  const response = await safeSendMessage({
+    action: "capture-region",
+    rectangle,
+    viewport: { width: window.innerWidth, height: window.innerHeight }
+  });
+  if (host) host.style.visibility = "visible";
+  if (!response) return;
+  if (response.error) {
+    showOcrResult("", response.error);
+    return;
+  }
+  showOcrResult(response.text, response.text ? "Text recognition complete." : "No text was found in this area.");
+}
+
+function showOcrResult(text, status) {
+  if (!shadow) return;
+  const result = shadow.querySelector(".ocr-result");
+  shadow.querySelector(".ocr-text").value = text;
+  shadow.querySelector(".ocr-status").textContent = status;
+  result.hidden = false;
+}
+
+function closeOcrResult() {
+  if (shadow) shadow.querySelector(".ocr-result").hidden = true;
+}
+
+async function readOcrText() {
+  const text = shadow.querySelector(".ocr-text").value.trim();
+  const status = shadow.querySelector(".ocr-status");
+  if (!text) {
+    status.textContent = "There is no text to read.";
+    return;
+  }
+  const response = await safeSendMessage({ action: "speak-text", text });
+  if (response) status.textContent = response.started ? "Reading recognized text." : "Unable to start reading.";
+}
+
+async function copyOcrText() {
+  const textArea = shadow.querySelector(".ocr-text");
+  const status = shadow.querySelector(".ocr-status");
+  if (!textArea.value.trim()) {
+    status.textContent = "There is no text to copy.";
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(textArea.value);
+  } catch {
+    textArea.select();
+    document.execCommand("copy");
+  }
+  status.textContent = "Text copied to the clipboard.";
 }
 
 function handleScroll(event) {
@@ -201,8 +335,48 @@ function ensureOverlay() {
       .translation { max-height: 96px; margin: 11px 8px 0; padding: 6px; }
       .current { max-height: 72px; margin: 9px 8px 0; padding: 6px; }
       .status { min-height: 20px; margin: 9px 8px 0; padding: 3px 5px; color: #000; background: #c0c0c0; border: 1px solid; border-color: #808080 #fff #fff #808080; font-size: 11px; }
+      .mini-player {
+        position: fixed; right: 12px; bottom: 12px; width: min(310px, calc(100vw - 24px));
+        padding: 3px 3px 8px; color: #000; background: #c0c0c0; border: 2px solid;
+        border-color: #fff #000 #000 #fff; box-shadow: inset 1px 1px #dfdfdf, inset -1px -1px #808080, 2px 2px 0 rgba(0,0,0,.28);
+        font: 12px Tahoma, "MS Sans Serif", Arial, sans-serif;
+      }
+      .mini-header { margin-bottom: 7px; padding: 3px 5px; color: #fff; background: #000080; font-weight: 700; }
+      .mini-controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 0 6px; }
+      .mini-controls .action { min-width: 0; padding-right: 4px; padding-left: 4px; }
+      .mini-progress { margin: 7px 6px 0; padding: 3px 5px; overflow: hidden; background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080; white-space: nowrap; text-overflow: ellipsis; }
+      .ocr-overlay { position: fixed; inset: 0; cursor: crosshair; background: rgba(0,0,0,.28); }
+      .ocr-instruction { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); padding: 7px 12px; color: #fff; background: #000080; border: 2px solid; border-color: #fff #000 #000 #fff; font: 12px Tahoma, "MS Sans Serif", Arial, sans-serif; }
+      .ocr-selection { position: fixed; border: 2px dashed #fff; outline: 1px solid #000; background: rgba(0,0,128,.16); }
+      .ocr-result { position: fixed; top: 50%; left: 50%; width: min(520px, calc(100vw - 24px)); padding: 3px 3px 10px; transform: translate(-50%, -50%); color: #000; background: #c0c0c0; border: 2px solid; border-color: #fff #000 #000 #fff; box-shadow: inset 1px 1px #dfdfdf, inset -1px -1px #808080, 2px 2px 0 rgba(0,0,0,.28); font: 12px Tahoma, "MS Sans Serif", Arial, sans-serif; }
+      .ocr-text { display: block; width: calc(100% - 16px); min-height: 180px; max-height: 50vh; margin: 8px; padding: 6px; resize: vertical; color: #000; background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080; border-radius: 0; font: 13px Tahoma, Arial, sans-serif; line-height: 1.4; }
+      .ocr-status { min-height: 20px; margin: 8px 8px 0; padding: 3px 5px; background: #fff; border: 1px solid; border-color: #808080 #fff #fff #808080; }
     </style>
-    <button class="launcher" type="button" title="Open reading panel">R</button>
+    <button class="launcher" type="button" title="Open reading panel" hidden>R</button>
+    <section class="mini-player" hidden>
+      <div class="mini-header">Selection Reader</div>
+      <div class="mini-controls">
+        <button class="action mini-previous" type="button" title="Previous sentence">Previous</button>
+        <button class="action mini-pause" type="button">Pause</button>
+        <button class="action mini-next" type="button" title="Next sentence">Next</button>
+        <button class="action mini-stop" type="button">Stop</button>
+      </div>
+      <div class="mini-progress"></div>
+    </section>
+    <div class="ocr-overlay" hidden>
+      <div class="ocr-instruction">Drag to select an area. Press Esc to cancel.</div>
+      <div class="ocr-selection" hidden></div>
+    </div>
+    <section class="ocr-result" hidden>
+      <div class="header"><span class="title">Screen Text Scanner</span><button class="close ocr-close" type="button" title="Close">x</button></div>
+      <textarea class="ocr-text" aria-label="Recognized text"></textarea>
+      <div class="actions">
+        <button class="action ocr-read" type="button">Read text</button>
+        <button class="action ocr-copy" type="button">Copy text</button>
+        <button class="action ocr-rescan" type="button">Scan again</button>
+      </div>
+      <div class="ocr-status" role="status" aria-live="polite"></div>
+    </section>
     <section class="panel" hidden>
       <div class="header"><span class="title">Selection Reader</span><button class="close" type="button" title="Close">x</button></div>
       <p class="text"></p>
@@ -249,6 +423,18 @@ function ensureOverlay() {
   shadow.querySelector(".pause").addEventListener("click", togglePause);
   shadow.querySelector(".next").addEventListener("click", () => skipReading(1));
   shadow.querySelector(".translate").addEventListener("click", translateAndRead);
+  shadow.querySelector(".mini-previous").addEventListener("click", () => skipReading(-1));
+  shadow.querySelector(".mini-pause").addEventListener("click", togglePause);
+  shadow.querySelector(".mini-next").addEventListener("click", () => skipReading(1));
+  shadow.querySelector(".mini-stop").addEventListener("click", stopReading);
+  const ocrOverlay = shadow.querySelector(".ocr-overlay");
+  ocrOverlay.addEventListener("pointerdown", beginOcrDrag);
+  ocrOverlay.addEventListener("pointermove", updateOcrDrag);
+  ocrOverlay.addEventListener("pointerup", finishOcrDrag);
+  shadow.querySelector(".ocr-close").addEventListener("click", closeOcrResult);
+  shadow.querySelector(".ocr-read").addEventListener("click", readOcrText);
+  shadow.querySelector(".ocr-copy").addEventListener("click", copyOcrText);
+  shadow.querySelector(".ocr-rescan").addEventListener("click", startOcrSelection);
 }
 
 function preserveSelection(event) {
@@ -301,16 +487,148 @@ async function skipReading(offset) {
 }
 
 function renderReadingState(state) {
+  const signature = state
+    ? `${state.active}|${state.paused}|${state.index}|${state.total}|${state.currentText}`
+    : "none";
+  if (signature === lastReadingStateSignature) return;
+  lastReadingStateSignature = signature;
+
+  if (!shadow && state?.active) ensureOverlay();
   if (!shadow) return;
   const playback = shadow.querySelector(".playback");
   const current = shadow.querySelector(".current");
   const pause = shadow.querySelector(".pause");
+  const miniPlayer = shadow.querySelector(".mini-player");
+  const miniPause = shadow.querySelector(".mini-pause");
+  const miniProgress = shadow.querySelector(".mini-progress");
   playback.hidden = !state?.active;
   current.hidden = !state?.active;
+  miniPlayer.hidden = !state?.active;
   pause.textContent = state?.paused ? "Resume" : "Pause";
+  miniPause.textContent = state?.paused ? "Resume" : "Pause";
   current.textContent = state?.active
     ? `${state.index + 1} / ${state.total}: ${state.currentText}`
     : "";
+  miniProgress.textContent = state?.active
+    ? `${state.index + 1} / ${state.total}: ${state.currentText}`
+    : "";
+
+  if (state?.active) {
+    highlightCurrentSentence(state);
+  } else {
+    clearReadingHighlight();
+  }
+}
+
+function highlightCurrentSentence(state) {
+  if (!globalThis.CSS?.highlights || typeof globalThis.Highlight !== "function") return;
+
+  if (!selectedRange) {
+    selectedRange = getSelectionDetails().range;
+  }
+  if (!selectedRange) return;
+
+  try {
+    const selectionMap = buildNormalizedRangeMap(selectedRange);
+    const sentence = normalizeForHighlight(state.currentText);
+    if (!sentence || !selectionMap.text) return;
+
+    if (state.index <= lastReadingIndex) highlightSearchOffset = 0;
+    let startIndex = selectionMap.text.indexOf(sentence, highlightSearchOffset);
+    if (startIndex < 0) startIndex = selectionMap.text.indexOf(sentence);
+    if (startIndex < 0) {
+      clearReadingHighlight();
+      return;
+    }
+
+    const start = selectionMap.positions[startIndex];
+    const end = selectionMap.positions[startIndex + sentence.length - 1];
+    const range = document.createRange();
+    range.setStart(start.startNode, start.startOffset);
+    range.setEnd(end.endNode, end.endOffset);
+
+    ensureHighlightStyle();
+    CSS.highlights.set("selection-reader-current", new Highlight(range));
+    highlightSearchOffset = startIndex + sentence.length;
+    lastReadingIndex = state.index;
+    scrollHighlightIntoView(range);
+  } catch {
+    clearReadingHighlight();
+  }
+}
+
+function buildNormalizedRangeMap(range) {
+  const root = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+    ? range.commonAncestorContainer.parentNode
+    : range.commonAncestorContainer;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
+    nodes.push(range.commonAncestorContainer);
+  } else {
+    while (walker.nextNode()) {
+      if (range.intersectsNode(walker.currentNode)) nodes.push(walker.currentNode);
+    }
+  }
+
+  let text = "";
+  const positions = [];
+  for (const node of nodes) {
+    const startOffset = node === range.startContainer ? range.startOffset : 0;
+    const endOffset = node === range.endContainer ? range.endOffset : node.data.length;
+    for (let offset = startOffset; offset < endOffset; offset += 1) {
+      const character = node.data[offset];
+      if (/\s/u.test(character)) {
+        if (!text || text.endsWith(" ")) {
+          if (text.endsWith(" ")) {
+            positions[positions.length - 1].endNode = node;
+            positions[positions.length - 1].endOffset = offset + 1;
+          }
+          continue;
+        }
+        text += " ";
+      } else {
+        text += character;
+      }
+      positions.push({
+        startNode: node,
+        startOffset: offset,
+        endNode: node,
+        endOffset: offset + 1
+      });
+    }
+  }
+
+  if (text.endsWith(" ")) {
+    text = text.slice(0, -1);
+    positions.pop();
+  }
+  return { text, positions };
+}
+
+function normalizeForHighlight(text) {
+  return (text || "").replace(/\s+/gu, " ").trim();
+}
+
+function ensureHighlightStyle() {
+  if (document.getElementById(`${HOST_ID}-highlight-style`)) return;
+  const style = document.createElement("style");
+  style.id = `${HOST_ID}-highlight-style`;
+  style.textContent = "::highlight(selection-reader-current){background:#000080;color:#fff}";
+  document.documentElement.appendChild(style);
+}
+
+function scrollHighlightIntoView(range) {
+  const rect = range.getBoundingClientRect();
+  if (rect.top < 20 || rect.bottom > window.innerHeight - 90) {
+    window.scrollBy({ top: rect.top - window.innerHeight * 0.35, behavior: "smooth" });
+  }
+}
+
+function clearReadingHighlight() {
+  globalThis.CSS?.highlights?.delete("selection-reader-current");
+  highlightSearchOffset = 0;
+  lastReadingIndex = -1;
 }
 
 async function translateAndRead() {
@@ -395,6 +713,8 @@ function extensionContextAvailable() {
 function invalidateExtensionContext() {
   contextActive = false;
   window.clearTimeout(selectionTimer);
+  clearReadingHighlight();
+  document.getElementById(`${HOST_ID}-highlight-style`)?.remove();
   host?.remove();
   host = null;
   shadow = null;
@@ -405,5 +725,22 @@ function invalidateExtensionContext() {
 }
 
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.action === "reading-state") renderReadingState(message.state);
+  if (message.action === "reading-state") {
+    renderReadingState(message.state);
+    return;
+  }
+  if (message.action === "start-ocr-selection") {
+    startOcrSelection();
+    return;
+  }
+  if (message.action === "ocr-captured") {
+    if (host) host.style.visibility = "visible";
+    showOcrResult("", "Loading OCR language model...");
+    return;
+  }
+  if (message.action === "ocr-progress" && shadow) {
+    const percentage = Math.round((message.progress || 0) * 100);
+    const label = String(message.status || "Recognizing text").replace(/^./, (character) => character.toUpperCase());
+    shadow.querySelector(".ocr-status").textContent = `${label} ${percentage}%`;
+  }
 });
