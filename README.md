@@ -32,8 +32,4 @@ A simple Chrome and Edge extension that reads selected text aloud from the exten
 - Harmless legacy-parameter warnings from the OCR engine are filtered while real OCR errors remain visible.
 - The interface can be switched between English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Thai, and Malay.
 
-## Keyboard shortcuts
 
-- **Alt+Shift+R**: read the current selection.
-- **Alt+Shift+P**: pause or resume.
-- **Alt+Shift+S**: stop reading.
