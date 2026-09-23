@@ -57,6 +57,11 @@ body.options-page.options-popup {
   padding: 11px;
 }
 
+.repository-link {
+  width: fit-content;
+  margin-top: 0;
+}
+
 .options-popup fieldset,
 .options-popup .voice-grid,
 .options-popup label,
