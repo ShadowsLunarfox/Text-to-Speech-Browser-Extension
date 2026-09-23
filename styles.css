@@ -26,20 +26,43 @@ body.options-page {
 body.options-page.options-popup {
   width: 540px;
   min-width: 540px;
-  max-height: 600px;
+  max-width: 540px;
   padding: 0;
-  overflow-y: auto;
+  overflow-y: visible;
+  overflow-x: hidden;
   background: #c0c0c0;
+}
+
+.options-popup-root {
+  width: 540px;
+  min-width: 540px;
+  max-width: 540px;
+  max-height: 600px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
 }
 
 .options-popup .options {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
+  overflow-x: clip;
 }
 
 .options-popup form {
+  min-width: 0;
   gap: 11px;
   padding: 11px;
+}
+
+.options-popup fieldset,
+.options-popup .voice-grid,
+.options-popup label,
+.options-popup .actions {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .back-button {
@@ -116,6 +139,21 @@ fieldset {
   border: 2px groove #ffffff;
 }
 
+.engine-info {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 5px 7px;
+  background: #ffffff;
+  border: 2px solid;
+  border-color: #808080 #ffffff #ffffff #808080;
+}
+
+.engine-info > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 legend {
   padding: 0 4px;
 }
@@ -165,6 +203,7 @@ input[type="range"] {
 
 select {
   height: 25px;
+  min-width: 0;
   padding: 2px 5px;
   color: #000000;
   background: #ffffff;

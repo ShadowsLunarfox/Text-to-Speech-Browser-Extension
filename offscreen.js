@@ -32,7 +32,7 @@ async function getWorker(languages) {
   if (ocrWorker) await ocrWorker.terminate();
   workerLanguages = languageKey;
   ocrWorker = await Tesseract.createWorker(languages, 1, {
-    workerPath: chrome.runtime.getURL("vendor/tesseract/worker.min.js"),
+    workerPath: chrome.runtime.getURL("ocr-worker.js"),
     workerBlobURL: false,
     corePath: chrome.runtime.getURL("vendor/tesseract/tesseract-core-simd-lstm.wasm.js"),
     cachePath: "selection-reader-lstm-v1",

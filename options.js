@@ -31,8 +31,10 @@ const valueLabels = {
 };
 const languageVoiceControls = [...document.querySelectorAll(".language-voice")];
 const isPopupView = new URLSearchParams(window.location.search).get("popup") === "1";
+let currentPlatformOs = "";
 
 if (isPopupView) {
+  document.documentElement.classList.add("options-popup-root");
   document.body.classList.add("options-popup");
   document.getElementById("backButton").hidden = false;
 }
@@ -41,10 +43,13 @@ init();
 
 async function init() {
   const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+  const platform = await chrome.runtime.getPlatformInfo();
+  currentPlatformOs = platform.os;
 
   controls.uiLanguage.value = settings.uiLanguage;
   applyInterfaceLanguage(settings.uiLanguage);
-  await populateVoices();
+  document.getElementById("systemEngine").textContent = getSystemEngineName(platform.os);
+  await populateVoices(platform.os);
 
   controls.autoDetectLanguage.checked = settings.autoDetectLanguage;
   controls.showSelectionButton.checked = settings.showSelectionButton;
@@ -66,6 +71,7 @@ form.addEventListener("input", updateValueLabels);
 controls.uiLanguage.addEventListener("change", async () => {
   await chrome.storage.sync.set({ uiLanguage: controls.uiLanguage.value });
   applyInterfaceLanguage(controls.uiLanguage.value);
+  localizeVoiceSources();
 });
 
 document.getElementById("backButton").addEventListener("click", () => {
@@ -120,13 +126,15 @@ function applyInterfaceLanguage(language) {
   ReaderI18n.apply(document, language);
 }
 
-async function populateVoices() {
+async function populateVoices(platformOs) {
   const voices = await chrome.tts.getVoices();
   const sortedVoices = voices.sort((a, b) => (a.lang || "").localeCompare(b.lang || ""));
   for (const voice of sortedVoices) {
     const option = document.createElement("option");
     option.value = voice.voiceName;
-    option.textContent = `${voice.voiceName}${voice.lang ? ` (${voice.lang})` : ""}`;
+    option.dataset.voiceSource = voice.extensionId ? "extension" : "system";
+    option.dataset.voiceLabel = `${voice.voiceName}${voice.lang ? ` (${voice.lang})` : ""}`;
+    option.textContent = option.dataset.voiceLabel;
     controls.voiceName.appendChild(option);
 
     for (const control of languageVoiceControls) {
@@ -135,6 +143,23 @@ async function populateVoices() {
       }
     }
   }
+  localizeVoiceSources();
+}
+
+function localizeVoiceSources() {
+  document.getElementById("systemEngine").textContent = getSystemEngineName(currentPlatformOs);
+  document.querySelectorAll("option[data-voice-label]").forEach((option) => {
+    const source = option.dataset.voiceSource === "extension"
+      ? ReaderI18n.t("extensionVoice", controls.uiLanguage.value)
+      : getSystemEngineName(currentPlatformOs);
+    option.textContent = `[${source}] ${option.dataset.voiceLabel}`;
+  });
+}
+
+function getSystemEngineName(platformOs) {
+  if (platformOs === "win") return ReaderI18n.t("windowsSystemVoices", controls.uiLanguage.value);
+  if (platformOs === "mac") return ReaderI18n.t("macosSystemVoices", controls.uiLanguage.value);
+  return ReaderI18n.t("systemVoices", controls.uiLanguage.value);
 }
 
 function updateValueLabels() {

@@ -26,9 +26,11 @@ A simple Chrome and Edge extension that reads selected text aloud from the exten
 - The current sentence is highlighted on the original web page while it is spoken.
 - A fixed Windows 98-style mini player appears during reading.
 - Chinese, English, Japanese, and Korean can each use a different preferred voice.
+- Installed Windows and macOS system voices are detected automatically and labeled in the voice list.
 - **Scan screen text** lets you drag over part of the current tab, recognize text locally with Tesseract.js, then read or copy the result.
 - OCR screenshots stay on the device. Language model files are downloaded on demand and cached by the browser.
-- The interface can be switched between English, Simplified Chinese, Traditional Chinese, Japanese, Korean, and Malay.
+- Harmless legacy-parameter warnings from the OCR engine are filtered while real OCR errors remain visible.
+- The interface can be switched between English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Thai, and Malay.
 
 ## Keyboard shortcuts
 

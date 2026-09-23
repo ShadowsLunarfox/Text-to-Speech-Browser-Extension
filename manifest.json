@@ -3,7 +3,7 @@
   "minimum_chrome_version": "114",
   "name": "Selection Text Reader",
   "description": "Read selected text aloud in its original language or translate and read it.",
-  "version": "2.5.0",
+  "version": "2.6.8",
   "permissions": [
     "activeTab",
     "contextMenus",
