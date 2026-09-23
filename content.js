@@ -136,11 +136,23 @@ function handleReadingShortcut(event) {
     event.ctrlKey ||
     event.altKey ||
     event.metaKey ||
-    event.repeat ||
-    !launcher ||
-    launcher.hidden
+    event.repeat
   ) {
     return;
+  }
+
+  if (!launcher || launcher.hidden) {
+    const selectionDetails = getSelectionDetails();
+    if (!selectionDetails.text || !selectionDetails.rect) return;
+
+    selectedText = selectionDetails.text;
+    selectedRange = selectionDetails.range;
+    highlightSearchOffset = 0;
+    lastReadingIndex = -1;
+    clearReadingHighlight();
+    ensureOverlay();
+    positionLauncher(selectionDetails.rect);
+    launcher.hidden = false;
   }
 
   event.preventDefault();
